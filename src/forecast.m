@@ -3,24 +3,19 @@ function yF = forecast(y, s, coef_in, H, varargin)
 % Usage:
 %   yF = forecast(y, s, coef_struct, H)
 %   yF = forecast(y, s, coef_vec, H, N, K)
-%
-% The function is robust to coef struct formats and numeric coef vectors.
 
-if nargin < 4
-    error('forecast requires inputs y,s,coef_in,H (and optional N,K when coef_in is numeric).');
+if nargin < 4, error('forecast requires y,s,coef_in,H'); end
+
+% Unwrap wrapper if needed
+if isstruct(coef_in) && isfield(coef_in,'coef') && ~isfield(coef_in,'vec') && ~isfield(coef_in,'c')
+    coef_in = coef_in.coef;
 end
 
-% Similar parsing logic as predict_in_sample
+% parse similar to predict_in_sample
 if isnumeric(coef_in)
-    if numel(varargin) < 2
-        error('forecast: when coef is numeric you must also provide N and K as additional arguments.');
-    end
-    N = varargin{1};
-    K = varargin{2};
+    if numel(varargin) < 2, error('forecast: when coef is numeric supply N and K'); end
+    N = varargin{1}; K = varargin{2};
     tmp = coef_in(:);
-    if length(tmp) ~= 2 + N + 2*K
-        error('forecast: length(coef_vec) mismatch with supplied N,K.');
-    end
     c = tmp(1); d = tmp(2);
     if N>0, a = tmp(3:2+N); else a = zeros(0,1); end
     if K>0
@@ -34,18 +29,13 @@ elseif isstruct(coef_in)
     if isfield(coef_in,'N') && isfield(coef_in,'K')
         N = coef_in.N; K = coef_in.K;
     else
-        % infer from fields or vec length
-        if isfield(coef_in,'a'), N = numel(coef_in.a); else N = []; end
-        if isfield(coef_in,'alpha'), K = numel(coef_in.alpha); elseif isfield(coef_in,'beta'), K = numel(coef_in.beta); else K = []; end
-        if isempty(N) || isempty(K)
-            if isfield(coef_in,'vec')
-                p = numel(coef_in.vec);
-                K = floor((p-2)/2);
-                N = p - 2 - 2*K;
-            else
-                if isempty(N), N = 0; end
-                if isempty(K), K = 0; end
-            end
+        if isfield(coef_in,'vec')
+            p = numel(coef_in.vec);
+            K = floor((p-2)/2);
+            N = p - 2 - 2*K;
+        else
+            if isfield(coef_in,'a'), N = numel(coef_in.a); else N = 0; end
+            if isfield(coef_in,'alpha'), K = numel(coef_in.alpha); else K = 0; end
         end
     end
 
@@ -81,10 +71,9 @@ elseif isstruct(coef_in)
         beta_sin = zeros(0,1);
     end
 else
-    error('forecast: coef_in must be a struct or numeric vector.');
+    error('forecast: coef_in must be numeric or struct.');
 end
 
-% Now compute forecasts recursively
 T = length(y);
 y_ext = [y(:); zeros(H,1)];
 for h = 1:H
@@ -100,5 +89,5 @@ for h = 1:H
     y_ext(T + h) = val;
 end
 
-yF = y_ext(T+1 : T+H);
+yF = y_ext(T+1:T+H);
 end
