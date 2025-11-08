@@ -11,7 +11,7 @@ best.K = NaN;
 best.coef = [];
 Sgrid = nan(length(Ngrid), length(Kgrid));
 
-% grid search
+% Grid search
 for iN = 1:length(Ngrid)
     N = Ngrid(iN);
     for jK = 1:length(Kgrid)
@@ -52,7 +52,7 @@ for iN = 1:length(Ngrid)
             best.score = S;
             best.N = N;
             best.K = K;
-            best.coef = beta_vec(:);   % temp numeric vector
+            best.coef = beta_vec(:);   % temporarily store numeric vector
             best.RSS = RSS;
             best.M = M;
             best.p = p;
@@ -60,40 +60,43 @@ for iN = 1:length(Ngrid)
     end
 end
 
-% store diagnostics
+% diagnostics
 best.S = Sgrid;
 best.Ngrid = Ngrid;
 best.Kgrid = Kgrid;
 
-% if no model found, return empty consistent struct
+% if no model found
 if isempty(best.coef)
     best.coef = struct('N', [], 'K', [], 'vec', [], 'c', [], 'd', [], 'a', [], 'alpha', [], 'beta', []);
     return;
 end
 
-% recompute final fit for chosen (N,K) to guarantee consistency
+% Recompute final fit to guarantee consistency
 N = best.N; K = best.K;
 [A_final, b_final] = build_design(y, s, N, K);
 [beta_final, RSS_final, ~] = qr_householder_solve(A_final, b_final);
 
+% Validate and unpack
 p_expected = 2 + N + 2*K;
 if length(beta_final) ~= p_expected
     error('select_model: final coefficient length mismatch: got %d expected %d', length(beta_final), p_expected);
 end
 
 tmpvec = beta_final(:);
+
+% Unpack c,d
 c = tmpvec(1);
 d = tmpvec(2);
 
-% unpack AR parameters a
-if N > 0
-    a = tmpvec(3 : 2+N);
+% Unpack a
+if N>0
+    a = tmpvec(3:2+N);
 else
     a = zeros(0,1);
 end
 
-% unpack seasonal alpha, beta
-if K > 0
+% Unpack seasonal alpha,beta with guaranteed shapes
+if K>0
     alpha = tmpvec(2+N+1 : 2+N+K);
     beta_sin = tmpvec(2+N+K+1 : 2+N+2*K);
 else
@@ -101,7 +104,15 @@ else
     beta_sin = zeros(0,1);
 end
 
-% Pack final coefficient struct with all expected named fields
+% Defensive: ensure column vectors and correct lengths
+a = reshape(a, [], 1);
+alpha = reshape(alpha, [], 1);
+beta_sin = reshape(beta_sin, [], 1);
+if numel(a) ~= N, a = [a; zeros(N - numel(a),1)]; end
+if numel(alpha) ~= K, alpha = [alpha; zeros(K - numel(alpha),1)]; end
+if numel(beta_sin) ~= K, beta_sin = [beta_sin; zeros(K - numel(beta_sin),1)]; end
+
+% Pack final coef struct with all expected named fields
 best.coef = struct( ...
     'N', N, ...
     'K', K, ...
@@ -111,9 +122,9 @@ best.coef = struct( ...
     'a', a, ...
     'alpha', alpha, ...
     'beta', beta_sin ...
-);
+    );
 
-% update final metadata
+% Update metadata
 best.RSS = RSS_final;
 best.p = p_expected;
 best.M = T - N;
