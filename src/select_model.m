@@ -52,7 +52,7 @@ for iN = 1:length(Ngrid)
             best.score = S;
             best.N = N;
             best.K = K;
-            best.coef = beta_vec(:);   % temp store numeric vector
+            best.coef = beta_vec(:);   % temp numeric vector
             best.RSS = RSS;
             best.M = M;
             best.p = p;
@@ -67,7 +67,7 @@ best.Kgrid = Kgrid;
 
 % if no model found, return empty consistent struct
 if isempty(best.coef)
-    best.coef = struct('N', [], 'K', [], 'vec', [], 'c', [], 'd', []);
+    best.coef = struct('N', [], 'K', [], 'vec', [], 'c', [], 'd', [], 'a', [], 'alpha', [], 'beta', []);
     return;
 end
 
@@ -85,8 +85,33 @@ tmpvec = beta_final(:);
 c = tmpvec(1);
 d = tmpvec(2);
 
-% pack a minimal, reliable coef struct (N,K,vec,c,d). downstream code will derive a/alpha/beta from vec
-best.coef = struct('N', N, 'K', K, 'vec', tmpvec, 'c', c, 'd', d);
+% unpack AR parameters a
+if N > 0
+    a = tmpvec(3 : 2+N);
+else
+    a = zeros(0,1);
+end
+
+% unpack seasonal alpha, beta
+if K > 0
+    alpha = tmpvec(2+N+1 : 2+N+K);
+    beta_sin = tmpvec(2+N+K+1 : 2+N+2*K);
+else
+    alpha = zeros(0,1);
+    beta_sin = zeros(0,1);
+end
+
+% Pack final coefficient struct with all expected named fields
+best.coef = struct( ...
+    'N', N, ...
+    'K', K, ...
+    'vec', tmpvec, ...
+    'c', c, ...
+    'd', d, ...
+    'a', a, ...
+    'alpha', alpha, ...
+    'beta', beta_sin ...
+);
 
 % update final metadata
 best.RSS = RSS_final;
