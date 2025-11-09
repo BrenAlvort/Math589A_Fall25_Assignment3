@@ -1,16 +1,35 @@
 function yhat = predict_in_sample(y, s, coef)
-y = y(:); T = numel(y); N = numel(coef.a); K = numel(coef.alpha);
-M = T - N; yhat = zeros(M,1);
-for k = 1:M
-    t = N + k; % actual time index for row k
-    sea = 0;
-    for h = 1:K
-        sea = sea + coef.alpha(h)*cos(2*pi*h*t/s) + coef.beta(h)*sin(2*pi*h*t/s);
+% PREDICT_IN_SAMPLE  one-step in-sample predictions yhat_{t|t-1} for t=N+1..T
+    y = y(:);
+    if isstruct(coef) && isfield(coef,'coef') && ~isfield(coef,'vec') && ~isfield(coef,'c')
+        % wrapper struct pattern, unwrap
+        coef = coef.coef;
     end
-    acc = coef.c + coef.d*t + sea;   %adding trend term
-    for i = 1:N
-        acc = acc + coef.a(i)*y(t-i);
+    if ~isstruct(coef)
+        error('predict_in_sample: coef must be a struct produced by select_model/unpack_coeffs.');
     end
-    yhat(k) = acc;
-end
+    N = coef.N; K = coef.K;
+    T = numel(y);
+    M = T - N;
+    if M <= 0, yhat = zeros(0,1); return; end
+
+    yhat = zeros(M,1);
+    rows = (N+1):T;
+    for idx = 1:M
+        t = rows(idx);
+        % seasonal part
+        if K > 0
+            kvec = (1:K);
+            TK = (2*pi/s) * (kvec * t); % 1xK
+            sea = coef.alpha(:).' .* cos(TK) + coef.beta(:).' .* sin(TK);
+            sea = sum(sea);
+        else
+            sea = 0;
+        end
+        val = coef.c + coef.d * t + sea;
+        for i = 1:N
+            val = val + coef.a(i) * y(t - i);
+        end
+        yhat(idx) = val;
+    end
 end
