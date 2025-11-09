@@ -1,35 +1,35 @@
-function yhat = predict_in_sample(y, s, coef_in, varargin)
-% robust in-sample one-step predictions; uses parse_coef_generic
-
-T = numel(y);
-
-[N,K,c,d,a,alpha,beta_sin] = parse_coef_generic(coef_in, varargin{:});
-
-% If c or d empty try to infer from vec (if present)
-if (isempty(c) || isempty(d)) && isstruct(coef_in) && isfield(coef_in,'vec')
-    tmp = coef_in.vec(:);
-    if numel(tmp) >= 2
-        c = tmp(1); d = tmp(2);
+function yhat = predict_in_sample(y, s, coef)
+% PREDICT_IN_SAMPLE  one-step in-sample predictions yhat_{t|t-1} for t=N+1..T
+    y = y(:);
+    if isstruct(coef) && isfield(coef,'coef') && ~isfield(coef,'vec') && ~isfield(coef,'c')
+        % wrapper struct pattern, unwrap
+        coef = coef.coef;
     end
-end
-if isempty(c) || isempty(d)
-    error('predict_in_sample: coef must provide c and d (either directly or via vec).');
-end
+    if ~isstruct(coef)
+        error('predict_in_sample: coef must be a struct produced by select_model/unpack_coeffs.');
+    end
+    N = coef.N; K = coef.K;
+    T = numel(y);
+    M = T - N;
+    if M <= 0, yhat = zeros(0,1); return; end
 
-% pad parameter arrays
-a = reshape(a,[],1); alpha = reshape(alpha,[],1); beta_sin = reshape(beta_sin,[],1);
-if numel(a) < N, a(end+1:N,1) = 0; end
-if numel(alpha) < K, alpha(end+1:K,1) = 0; end
-if numel(beta_sin) < K, beta_sin(end+1:K,1) = 0; end
-
-y = y(:);
-yhat = zeros(T - N, 1);
-rows = (N+1):T;
-for idx = 1:numel(rows)
-    t = rows(idx);
-    v = c + d * t;
-    for i = 1:N, v = v + a(i) * y(t - i); end
-    for k = 1:K, v = v + alpha(k) * cos(2*pi*k*t/s) + beta_sin(k) * sin(2*pi*k*t/s); end
-    yhat(idx) = v;
-end
+    yhat = zeros(M,1);
+    rows = (N+1):T;
+    for idx = 1:M
+        t = rows(idx);
+        % seasonal part
+        if K > 0
+            kvec = (1:K);
+            TK = (2*pi/s) * (kvec * t); % 1xK
+            sea = coef.alpha(:).' .* cos(TK) + coef.beta(:).' .* sin(TK);
+            sea = sum(sea);
+        else
+            sea = 0;
+        end
+        val = coef.c + coef.d * t + sea;
+        for i = 1:N
+            val = val + coef.a(i) * y(t - i);
+        end
+        yhat(idx) = val;
+    end
 end
