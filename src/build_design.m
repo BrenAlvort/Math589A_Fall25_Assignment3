@@ -1,49 +1,56 @@
 function [A,b,meta] = build_design(y, s, N, K)
 % BUILD_DESIGN  Construct LS system for N-th order difference eq + K harmonics.
 %   y : Tx1 double (column)
-%   s : seasonal period (e.g., 12)
+%   s : scalar season (e.g., 12)
 %   N : nonnegative integer (order of past)
 %   K : nonnegative integer (# harmonics)
 % Returns:
-%   A : (T-N)x(2+N+2K) matrix  [1, t, lags..., cos..., sin...]
-%   b : (T-N)x1 vector         [y_{N+1: T}]
+%   A : (T-N) x (2 + N + 2K) matrix  [1, t, lags..., cos..., sin...]
+%   b : (T-N) x 1 vector             [y_{N+1:T}]
 %   meta : struct with fields: .rows=M, .p=p, .t=(N+1:T).'
-
+%
+    narginchk(4,4);
     y = y(:);
     T = numel(y);
-    M = T - N;
-    p = 2 + N + 2*K;            % <-- include both c and d (constant and time)
-    if M <= p
-        error('Underdetermined: T-N (= %d) must exceed p (= %d).', M, p);
+    if N < 0 || K < 0 || floor(N)~=N || floor(K)~=K
+        error('N and K must be nonnegative integers.');
     end
 
-    b = y(N+1:T);
-    A = zeros(M, p);
+    M = T - N;
+    p = 2 + N + 2*K;
+    if M < p
+        error('Underdetermined: T-N (= %d) must be >= p (= %d).', M, p);
+    end
 
+    % response and time index
+    b = y(N+1:T);
     t = (N+1:T).';
 
-    % column 1: constant
-    A(:,1) = 1;
-    % column 2: time t for linear trend d * t
-    A(:,2) = t;
+    % preallocate A
+    A = zeros(M, p);
 
-    col = 2;
-    % lag columns y_{t-1} ... y_{t-N}
+    col = 1;
+    A(:, col) = 1;           % intercept
+    col = col + 1;
+    A(:, col) = t;           % linear trend (absolute time)
+    col = col + 1;
+
+    % lag columns y_{t-1},...,y_{t-N}
     for i = 1:N
+        A(:, col) = y(N+1-i : T-i);
         col = col + 1;
-        A(:, col) = y(N+1 - i : T - i);
     end
 
-    % cosine columns
-    for k = 1:K
-        col = col + 1;
-        A(:, col) = cos(2*pi*k*t/s);
-    end
-
-    % sine columns
-    for k = 1:K
-        col = col + 1;
-        A(:, col) = sin(2*pi*k*t/s);
+    % vectorized seasonal harmonics if K > 0
+    if K > 0
+        kvec = (1:K);
+        % M x K cosine and sine matrices
+        % use outer product t * kvec to avoid loops
+        TK = (t * kvec) * (2*pi/s);        % M x K matrix of (2*pi*k*t/s)
+        A(:, col:col+K-1) = cos(TK);       % cos columns
+        col = col + K;
+        A(:, col:col+K-1) = sin(TK);       % sin columns
+        col = col + K;
     end
 
     meta = struct('rows', M, 'p', p, 't', t);
