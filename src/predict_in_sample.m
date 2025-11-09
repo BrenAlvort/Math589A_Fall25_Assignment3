@@ -7,7 +7,7 @@ for k = 1:M
     for h = 1:K
         sea = sea + coef.alpha(h)*cos(2*pi*h*t/s) + coef.beta(h)*sin(2*pi*h*t/s);
     end
-    acc = coef.c + sea;
+    acc = coef.c + coef.d*t + sea;   %adding trend term
     for i = 1:N
         acc = acc + coef.a(i)*y(t-i);
     end
